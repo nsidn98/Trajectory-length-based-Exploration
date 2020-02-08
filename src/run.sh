@@ -11,12 +11,13 @@ source /tools/config.sh
 source activate py35
 
 # Change to the directory in which your code is present
-cd /storage/home/sidnayak/Gradient-Exploration-for-Deep-RL/src/
+cd /storage/home/sidnayak/Trajectory-length-based-Exploration/src/
 
 # Run the code. The -u option is used here to use unbuffered writes
 # so that output is piped to the file as and when it is produced.
 # Here, the code is the MNIST Tensorflow example.
 # python -u main.py --tensorboard=1 &> out
-# python -u -W ignore main.py --tensorboard=1 --grad_explore=0 --env_name=PongNoFrameskip-v4 --env_max_rew=18 --num_exps=5 --algo=DDDQN --CNN=1 --lr=0.0001 --max_episodes=300 &> out
-python -u -W ignore main.py --tensorboard=1 --grad_explore=1 --env_name=PongNoFrameskip-v4 --env_max_rew=18 --num_exps=5 --algo=DDDQN --CNN=1 --lr=0.0001 --max_episodes=300 --eta=0.01 &> out
-python -u -W ignore main.py --tensorboard=1 --grad_explore=1 --env_name=PongNoFrameskip-v4 --env_max_rew=18 --num_exps=5 --algo=DDDQN --CNN=1 --lr=0.0001 --max_episodes=300 --eta=0.1 &> out
+python3 -W ignore main.py --tensorboard=1 --num_exps=2 --env_name=PongNoFrameskip-v4 --env_max_rew=18 --algo=DDDQN --CNN=1 --lr=0.0001 --max_episodes=300 --H=200 --T=2000000 --ct_func=eps_greedy &> out
+python3 -W ignore main.py --tensorboard=1 --num_exps=2 --env_name=PongNoFrameskip-v4 --env_max_rew=18 --algo=DDDQN --CNN=1 --lr=0.0001 --max_episodes=300 --H=200 --T=2000000 --ct_func=linear &> out
+python3 -W ignore main.py --tensorboard=1 --num_exps=2 --env_name=PongNoFrameskip-v4 --env_max_rew=18 --algo=DDDQN --CNN=1 --lr=0.0001 --max_episodes=300 --H=200 --T=2000000 --ct_func=exp &> out
+python3 -W ignore main.py --tensorboard=1 --num_exps=2 --env_name=PongNoFrameskip-v4 --env_max_rew=18 --algo=DDDQN --CNN=1 --lr=0.0001 --max_episodes=300 --H=200 --T=2000000 --ct_func=neg_exp &> out
