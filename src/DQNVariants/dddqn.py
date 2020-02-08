@@ -69,7 +69,7 @@ class DDDQN(nn.Module):
         value     = self.value(x)
         return value + advantage - advantage.mean()
     
-    def act(self, state, epsilon=0):
+    def act(self, state, env, epsilon=0):
         # setting epsilon=0 because we do not want epsilon-greedy exploration
         if random.random() > epsilon:
             state   = (torch.FloatTensor(state).unsqueeze(0))
@@ -118,7 +118,7 @@ class CnnDDDQN(nn.Module):
     def feature_size(self):
         return self.features(autograd.Variable(torch.zeros(1, *self.input_shape))).view(1, -1).size(1)
     
-    def act(self, state, epsilon=0):
+    def act(self, state, env, epsilon=0):
         if random.random() > epsilon:
             state   = (torch.FloatTensor(np.float32(state)).unsqueeze(0)).to(device)
             q_value = self.forward(state)
@@ -182,13 +182,7 @@ class DDDQN_Agent:
         
         loss = (q_value - (expected_q_value.detach())).pow(2).mean()
 
-        # evaluate gradient of loss wrt inputs for evaluating aux_rewards
-        if grad:
-            gradient = torch.autograd.grad(loss,state)
-        else:
-            gradient = None
-        
-        return loss, gradient
+        return loss
 
     def epsilon_scheduler(self,i,t):
         '''
@@ -246,10 +240,7 @@ class DDDQN_Agent:
             
             if len(self.replay_buffer) > self.replay_initial:
                 batch = self.replay_buffer.sample(self.args.batch_size)
-                loss, gradient = self.compute_td_loss(batch, grad = self.args.grad_explore)
-                # if gradient exploration method, then compute aux_rewards and the new loss with new rewards
-                if self.args.grad_explore:
-                    loss = self.compute_td_loss_aux_rewards(batch,gradient,frame_idx)
+                loss = self.compute_td_loss(batch)
 
                 # backward prop and update weights
                 self.optimizer.zero_grad()

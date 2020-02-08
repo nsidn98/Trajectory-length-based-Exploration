@@ -161,7 +161,6 @@ class DDQN_Agent:
         
         loss = (q_value - (expected_q_value.data)).pow(2).mean()
 
-        # evaluate gradient of loss wrt inputs for evaluating aux_rewards
         
         return loss
 

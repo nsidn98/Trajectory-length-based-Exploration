@@ -158,7 +158,7 @@ class DQN_Agent:
 
         return loss
 
-    def epsilon_scheduler(self,i,t):
+    def epsilon_scheduler(self,i,t,H):
         '''
         Return 0 if we want greedy actions
         Return 1 if we want to explore randomly for the remainder of the episode
@@ -168,11 +168,11 @@ class DQN_Agent:
         epsilon_decay = 500
         
         if self.args.ct_func == 'linear':
-            ct = t*self.args.H/self.args.T
+            ct = t*H/self.args.T
         elif self.args.ct_func == 'neg_exp': # below the linear line
-            ct = self.args.H*(1-np.exp(t*self.args.H/self.args.T))
+            ct = H*(1-np.exp(t*H/self.args.T))
         elif self.args.ct_func == 'exp': # above the linear line
-            ct = self.args.H*(np.exp(t*np.log(2)/self.args.T)-1)
+            ct = H*(np.exp(t*np.log(2)/self.args.T)-1)
         elif self.args.ct_func == 'eps_greedy':
             epsilon = epsilon_final + (epsilon_start - epsilon_final) * math.exp(-1. * t / epsilon_decay)
             return epsilon
@@ -189,12 +189,14 @@ class DQN_Agent:
         episode_reward = 0
         episode_num = 0
         episode_reward_buffer = []
+        episode_len_buffer = []
+        H = 0
 
         state = self.env.reset()
         episode_step = 0
         for frame_idx in range(self.args.T):
             episode_step += 1
-            epsilon = self.epsilon_scheduler(episode_step,frame_idx)
+            epsilon = self.epsilon_scheduler(episode_step,frame_idx,H)
             if self.args.tensorboard:
                 self.writer.add_scalar('Epsilon',epsilon,frame_idx)
             action = self.current_model.act(state, self.env, epsilon)
@@ -210,6 +212,8 @@ class DQN_Agent:
                 if self.args.tensorboard:
                     self.writer.add_scalar('Reward',episode_reward,episode_num)
                 episode_reward = 0
+                episode_len_buffer.append(episode_step)
+                H = np.max(episode_len_buffer)  # increase the horizon length as it learns more
                 episode_step = 0
             
             if len(self.replay_buffer) > self.replay_initial:
