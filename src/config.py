@@ -6,17 +6,10 @@ def str2list(v):
     else:
         return [v_ for v_ in v.split(',')]
 
-'''
-python3 main.py --tensorboard=1 --grad_explore=0 --env_name=CartPole-v0 --env_max_rew=195 --num_exps=1 --algo=DDDQN
-python3 main.py --tensorboard=1 --grad_explore=1 --env_name=CartPole-v0 --env_max_rew=195 --num_exps=1 --algo=DDDQN
-
-python3 main.py --tensorboard=1 --grad_explore=0 --env_name=MountainCar-v0 --env_max_rew=-110 --num_exps=1 --algo=DDDQN
-python3 main.py --tensorboard=1 --grad_explore=1 --env_name=MountainCar-v0 --env_max_rew=-110 --num_exps=1 --algo=DDDQN
-
-python3 main.py --tensorboard=1 --grad_explore=0 --env_name=PongNoFrameskip-v4 --env_max_rew=18 --num_exps=1 --algo=DDDQN --CNN=1 --lr=0.0001 --max_episodes=10000
-python3 main.py --tensorboard=1 --grad_explore=1 --env_name=PongNoFrameskip-v4 --env_max_rew=18 --num_exps=1 --algo=DDDQN --CNN=1 --lr=0.0001 --max_episodes=10000
-
-'''
+# python3 -W ignore main.py --tensorboard=1 --num_exps=5 --env_name=CartPole-v0 --env_max_rew=195 --algo=DQN --CNN=0 --max_episodes=500 --H=200 --T=60000 --ct_func=eps_greedy
+# python3 -W ignore main.py --tensorboard=1 --num_exps=5 --env_name=CartPole-v0 --env_max_rew=195 --algo=DQN --CNN=0 --max_episodes=500 --H=200 --T=60000 --ct_func=linear
+# python3 -W ignore main.py --tensorboard=1 --num_exps=5 --env_name=CartPole-v0 --env_max_rew=195 --algo=DQN --CNN=0 --max_episodes=500 --H=200 --T=60000 --ct_func=exp
+# python3 -W ignore main.py --tensorboard=1 --num_exps=5 --env_name=CartPole-v0 --env_max_rew=195 --algo=DQN --CNN=0 --max_episodes=500 --H=200 --T=60000 --ct_func=neg_exp
 
 parser = argparse.ArgumentParser(description='DQN')
 
@@ -24,10 +17,6 @@ parser.add_argument('--seed', type=int, default=0,
                     help='random seed for gym, torch, cuda, numpy')
 parser.add_argument('--tensorboard', type=int, default=1, 
                     help='Whether we want tensorboardX logging')
-parser.add_argument('--grad_explore', type=int, default=1,
-                    help='Whether we want to use the gradient exploration method')
-parser.add_argument('--eta', type = float, default=0.1,
-                    help = 'scaling factor for auxillary reward')
 parser.add_argument('--num_exps', type=int, default=1,
                     help='Number of experiments to run')
 parser.add_argument('--env_name',type=str, default='CartPole-v0',
@@ -46,6 +35,12 @@ parser.add_argument('--CNN', type=int, default=0,
                     help='To use CNN for Atari environments')
 parser.add_argument('--max_episodes', type=int, default=1000,
                     help='Maximum number of episodes to train the agent')
+parser.add_argument('--H',type=int, default=3000,
+                    help='Horizon of the task')
+parser.add_argument('--T',type=int, default=1000000,
+                    help='Total time steps to train')
+parser.add_argument('--ct_func',type=str,default='linear',
+                    help='Function for ct') # linear, exp, neg_exp
 
 
 args = parser.parse_args()

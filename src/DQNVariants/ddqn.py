@@ -57,10 +57,10 @@ class DDQN(nn.Module):
     def forward(self, x):
         return self.layers(x)
     
-    def act(self, state, epsilon=0):
+    def act(self, state, env, epsilon):
         # setting epsilon=0 because we do not want epsilon-greedy exploration
         if random.random() > epsilon:
-            state   = (torch.FloatTensor(state).unsqueeze(0))
+            state   = (torch.FloatTensor(state).unsqueeze(0)).to(device)
             q_value = self.forward(state)
             action  = int(q_value.max(1)[1].data[0])
         else:
@@ -98,9 +98,9 @@ class CnnDDQN(nn.Module):
     def feature_size(self):
         return self.features(autograd.Variable(torch.zeros(1, *self.input_shape))).view(1, -1).size(1)
     
-    def act(self, state, epsilon=0):
+    def act(self, state, env, epsilon):
         if random.random() > epsilon:
-            state   = Variable(torch.FloatTensor(np.float32(state)).unsqueeze(0), volatile=True)
+            state   = Variable(torch.FloatTensor(np.float32(state)).unsqueeze(0), volatile=True).to(device)
             q_value = self.forward(state)
             action  = q_value.max(1)[1].data[0]
         else:
@@ -132,24 +132,24 @@ class DDQN_Agent:
         np.random.seed(self.args.seed)
         # tensorboardx
         if self.args.tensorboard:
-                print('Init tensorboardX')
+                # print('Init tensorboardX')
                 self.writer = SummaryWriter(log_dir='runs/{}'.format(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")))
 
     def update_target(self):
         self.target_model.load_state_dict(self.current_model.state_dict())
     
-    def compute_td_loss(self, batch, grad = True):
+    def compute_td_loss(self, batch):
         '''
         Compute the loss for the Q-networks
         '''
 
         state, action, reward, next_state, done = batch
 
-        state      = Variable(torch.FloatTensor(np.float32(state)),requires_grad = grad)
-        next_state = Variable(torch.FloatTensor(np.float32(next_state)),requires_grad= grad)
-        action     = Variable(torch.LongTensor(action))
-        reward     = Variable(torch.FloatTensor(reward))
-        done       = Variable(torch.FloatTensor(done))
+        state      = Variable(torch.FloatTensor(np.float32(state))).to(device)
+        next_state = Variable(torch.FloatTensor(np.float32(next_state))).to(device)
+        action     = Variable(torch.LongTensor(action)).to(device)
+        reward     = Variable(torch.FloatTensor(reward)).to(device)
+        done       = Variable(torch.FloatTensor(done)).to(device)
 
         q_values      = self.current_model(state)
         next_q_values = self.current_model(next_state)
@@ -162,49 +162,50 @@ class DDQN_Agent:
         loss = (q_value - (expected_q_value.data)).pow(2).mean()
 
         # evaluate gradient of loss wrt inputs for evaluating aux_rewards
-        if grad:
-            gradient = torch.autograd.grad(loss,state)
-        else:
-            gradient = None
         
-        return loss, gradient
-
-    def compute_td_loss_aux_rewards(self, batch,gradient,frame_idx):
-        '''
-        Store R = reward + aux_reward
-        And compute the loss with aux_rewards
-        '''
-        state, action, reward, next_state, done = batch
-        if self.args.CNN:
-            aux_rew = torch.clamp(torch.norm(gradient[0],dim=1),min=0, max =10)
-            aux_rew = torch.clamp(torch.norm(aux_rew,dim=1),min=0, max =10)
-            aux_rew = torch.clamp(torch.norm(aux_rew,dim=1),min=0, max =10)
-        else:
-            aux_rew = torch.clamp(torch.norm(gradient[0],dim=1),min=0, max =10)
-        new_reward = reward + self.args.eta * aux_rew.cpu().numpy()
-        if self.args.tensorboard:
-            self.writer.add_scalar('Rewards/aux_rew',aux_rew.cpu().numpy().mean(),frame_idx)
-            self.writer.add_scalar('Rewards/rew',np.array(reward).mean(),frame_idx)
-            self.writer.add_scalar('Rewards/rew',np.array(new_reward).mean(),frame_idx)
-        
-        batch = state, action, new_reward, next_state, done
-
-        loss, _ = self.compute_td_loss(batch,grad=False)
         return loss
+
+    def epsilon_scheduler(self,i,t):
+        '''
+        Return 0 if we want greedy actions
+        Return 1 if we want to explore randomly for the remainder of the episode
+        '''
+        epsilon_start = 1.0
+        epsilon_final = 0.01
+        epsilon_decay = 500
+        
+        if self.args.ct_func == 'linear':
+            ct = t*self.args.H/self.args.T
+        elif self.args.ct_func == 'neg_exp': # below the linear line
+            ct = self.args.H*(1-np.exp(t*self.args.H/self.args.T))
+        elif self.args.ct_func == 'exp': # above the linear line
+            ct = self.args.H*(np.exp(t*np.log(2)/self.args.T)-1)
+        elif self.args.ct_func == 'eps_greedy':
+            epsilon = epsilon_final + (epsilon_start - epsilon_final) * math.exp(-1. * t / epsilon_decay)
+            return epsilon
+        if i < ct:
+            # epsilon = 0
+            return 0
+        elif i>= ct:
+            # epsilon = 1
+            return 1
+        # return epsilon
 
         
 
     def train(self):
-        frame_idx = 0
         episode_reward = 0
         episode_num = 0
         episode_reward_buffer = []
 
         state = self.env.reset()
-
-        while True:
-            frame_idx += 1
-            action = self.current_model.act(state)
+        episode_step = 0
+        for frame_idx in range(self.args.T):
+            episode_step += 1
+            epsilon = self.epsilon_scheduler(episode_step,frame_idx)
+            if self.args.tensorboard:
+                self.writer.add_scalar('Epsilon',epsilon,frame_idx)
+            action = self.current_model.act(state, self.env, epsilon)
             next_state, reward, done, _ = self.env.step(action)
             self.replay_buffer.push(state, action, reward, next_state, done)
             state = next_state
@@ -217,14 +218,11 @@ class DDQN_Agent:
                 if self.args.tensorboard:
                     self.writer.add_scalar('Reward',episode_reward,episode_num)
                 episode_reward = 0
+                episode_step = 0
             
             if len(self.replay_buffer) > self.replay_initial:
                 batch = self.replay_buffer.sample(self.args.batch_size)
-                loss, gradient = self.compute_td_loss(batch, grad = self.args.grad_explore)
-                # if gradient exploration method, then compute aux_rewards and the new loss with new rewards
-                if self.args.grad_explore:
-                    loss = self.compute_td_loss_aux_rewards(batch,gradient,frame_idx)
-
+                loss = self.compute_td_loss(batch)
                 # backward prop and update weights
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -244,20 +242,3 @@ class DDQN_Agent:
                     np.save(self.save_name +'.npy',np.array(episode_reward_buffer))
                     break
 
-
-            
-            
-
-if __name__ == "__main__":
-    if not os.path.exists('Exps/'):
-        os.makedirs('Exps/')
-    # name to save the .npy files for rewards
-    if args.grad_explore:
-        save_name = 'Exps/grad_expl_'
-    else:
-        save_name = 'Exps/vanilla_'
-
-    for k in range(args.num_exps):
-        save_name = save_name+'DQN_'+str(args.env_name[:-3])+'_'+str(args.eta)+'_'+str(k)
-        agent = DQN_Agent(env_name = args.env_name, save_name = save_name, args=args)
-        agent.train()
